@@ -1,0 +1,15 @@
+[tool.poetry]
+name = "apple-health-dashboard"
+version = "0.1.0"
+description = ""
+authors = ["Takeshi \"Ken\" Tomaru <gh@tomarun.net>"]
+readme = "README.md"
+packages = [{include = "apple_health_dashboard", from = "src"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
