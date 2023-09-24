@@ -73,7 +73,8 @@ time_range = html.Div(
 
 
 @callback(Output('output-graph', 'children'),
-          Output('output-table', 'children'),
+          Output('output-table_l', 'children'),
+          Output('output-table_r', 'children'),
           Input('upload-data', 'contents'),
           State('upload-data', 'filename'),
           State('upload-data', 'last_modified'),
@@ -86,7 +87,7 @@ def update_output(contents, filename, date, time_range):
         if LAST_DATA_PATH.exists():
             g.df = pd.read_pickle(LAST_DATA_PATH)
         else:
-            return None, None
+            return None, None, None
 
     start_date = g.df['startDate'].min()
     last_date = g.df['startDate'].max()
@@ -100,7 +101,8 @@ def update_output(contents, filename, date, time_range):
         start_date = start_date.replace(hour=0, minute=0, second=0,
                                         microsecond=0, nanosecond=0)
     df = g.df[g.df['startDate'] >= start_date]
-    return build_graph(df), build_table(df)
+    table_l, table_r = build_table(df)
+    return build_graph(df), table_l, table_r
 
 
 def parse_contents(contents, filename, date):
@@ -225,10 +227,16 @@ def build_table(df):
                              RecordType.BM.value: 'BM'},
                     inplace=True)
     df_pivot = df_pivot.reindex(columns=['Date', 'SBP', 'DBP', 'HR', 'BM'])
-    table = dbc.Table.from_dataframe(
-            df_pivot, striped=True, bordered=True, hover=True
+    n_rows = len(df_pivot)
+    df_pivot_l = df_pivot[:(n_rows + 1) // 2]
+    df_pivot_r = df_pivot[(n_rows + 1) // 2:]
+    table_l = dbc.Table.from_dataframe(
+            df_pivot_l, striped=True, bordered=True, hover=True
     )
-    return table
+    table_r = dbc.Table.from_dataframe(
+            df_pivot_r, striped=True, bordered=True, hover=True
+    )
+    return table_l, table_r
 
 
 app.layout = dbc.Container(
@@ -237,7 +245,9 @@ app.layout = dbc.Container(
             dbc.Row(dbc.Col(time_range)),
             dbc.Row(dbc.Col(html.Div(id='output-graph'))),
             dbc.Row([dbc.Col(width=1),
-                     dbc.Col(html.Div(id='output-table'), width=4)]),
+                     dbc.Col(html.Div(id='output-table_l'), width=4),
+                     dbc.Col(width=1),
+                     dbc.Col(html.Div(id='output-table_r'), width=4)]),
         ],
         fluid=True
 )
