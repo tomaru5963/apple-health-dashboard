@@ -1,7 +1,9 @@
 import base64
+from datetime import timedelta
 from enum import Enum
 import io
 from pathlib import Path
+from typing import NamedTuple, Optional
 import zipfile
 
 from dash import callback, Dash, dcc, html, Input, Output, State
@@ -10,6 +12,20 @@ from flask import g
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+
+
+class TimeRange(NamedTuple):
+    label: str
+    value: int
+    delta: Optional[timedelta] = None
+
+
+TIME_RANGE_TABLE = [
+        TimeRange('Entire duration', -1),
+        TimeRange('One year', 1, timedelta(days=365)),
+        TimeRange('Six months', 2, timedelta(days=183)),
+        TimeRange('One month', 3, timedelta(days=31)),
+]
 
 
 RecordType = Enum('RecordType',
@@ -40,12 +56,29 @@ file_upload = dcc.Upload(
 )
 
 
+time_range = html.Div(
+    [
+        dbc.Label('Period of time'),
+        dbc.RadioItems(
+            options=[
+                {'label': tr.label, 'value': tr.value}
+                for tr in TIME_RANGE_TABLE
+            ],
+            value=TIME_RANGE_TABLE[0].value,
+            id='time-range-input',
+            inline=True,
+        ),
+    ]
+)
+
+
 @callback(Output('output-graph', 'children'),
           Output('output-table', 'children'),
           Input('upload-data', 'contents'),
           State('upload-data', 'filename'),
-          State('upload-data', 'last_modified'))
-def update_output(contents, filename, date):
+          State('upload-data', 'last_modified'),
+          Input('time-range-input', 'value'))
+def update_output(contents, filename, date, time_range):
     df = parse_contents(contents, filename, date)
     if df is not None:
         g.df = df
@@ -54,7 +87,20 @@ def update_output(contents, filename, date):
             g.df = pd.read_pickle(LAST_DATA_PATH)
         else:
             return None, None
-    return build_graph(), build_table()
+
+    start_date = g.df['startDate'].min()
+    last_date = g.df['startDate'].max()
+    for tr in TIME_RANGE_TABLE:
+        if time_range == tr.value:
+            break
+    else:
+        assert False, 'Invalid time_range value'
+    if tr.delta is not None:
+        start_date = last_date - tr.delta
+        start_date = start_date.replace(hour=0, minute=0, second=0,
+                                        microsecond=0, nanosecond=0)
+    df = g.df[g.df['startDate'] >= start_date]
+    return build_graph(df), build_table(df)
 
 
 def parse_contents(contents, filename, date):
@@ -84,8 +130,7 @@ def parse_contents(contents, filename, date):
 
 # https://megatenpa.com/python/plotly/go/go-subplot/
 # https://megatenpa.com/python/plotly/go/go-subplot/
-def build_graph():
-    df = g.df
+def build_graph(df):
     df_bp = df.query(f'type == "{RecordType.SBP.value}" or '
                      f'type == "{RecordType.DBP.value}"')
     graph_bp = go.Box(x=df_bp['startDate'], y=df_bp['value'],
@@ -168,8 +213,7 @@ def build_graph_alt2():
     return dcc.Graph(figure=fig)
 
 
-def build_table():
-    df = g.df
+def build_table(df):
     df_pivot = df.pivot(
             index='date', columns='type', values='value'
     ).reset_index()
@@ -190,6 +234,7 @@ def build_table():
 app.layout = dbc.Container(
         [
             dbc.Row(dbc.Col(file_upload)),
+            dbc.Row(dbc.Col(time_range)),
             dbc.Row(dbc.Col(html.Div(id='output-graph'))),
             dbc.Row([dbc.Col(width=1),
                      dbc.Col(html.Div(id='output-table'), width=4)]),
