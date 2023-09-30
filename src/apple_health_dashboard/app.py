@@ -36,10 +36,11 @@ RecordType = Enum('RecordType',
 
 
 app = Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-LAST_DATA_PATH = Path(app.server.instance_path) / 'df.pkl'
+server = app.server     # Flask app
+LAST_DATA_PATH = Path(server.instance_path) / 'df.pkl'
 
 
-@app.server.teardown_appcontext
+@server.teardown_appcontext
 def teardown_df(exception):
     df = g.pop('df', None)
 
